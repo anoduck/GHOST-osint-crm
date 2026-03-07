@@ -290,4 +290,7 @@ backend/package-lock.json
 !README.md
 !LICENSE
 !.env.example
-!backend/.env.example
+!backend/.env.examplebackend/docker-compose.yml
+
+# Ignore local docker-compose
+backend/docker-compose.yml
