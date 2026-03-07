@@ -4,6 +4,7 @@
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const readline = require('readline');
+require('dotenv').config();
 
 // Determine database host based on environment
 const dbConfig = {

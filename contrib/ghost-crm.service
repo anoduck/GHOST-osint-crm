@@ -1,0 +1,18 @@
+[Unit]
+Description=GHOST OSINT CRM
+After=network.target
+
+[Service]
+PIDFile=/run/ghost-crm.pid
+WorkingDirectory=/srv/ghost
+ExecStart=/usr/bin/node /srv/ghost/server.js
+ExecStop=/bin/kill \
+	-s \
+	QUIT \
+	$MAINPID
+User=nodejs
+Group=nodejs
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

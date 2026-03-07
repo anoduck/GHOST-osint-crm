@@ -10,6 +10,10 @@ const { exec } = require('child_process');
 const util = require('util');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
+require('dotenv').config();
+
+// dump environment variables
+console.log(process.env);
 
 // Add this with the other requires at the top
 let geocodingService;
@@ -2532,7 +2536,6 @@ app.get('/api/wireless-networks/:id', requireAuth, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Wireless network not found' });
     }
-    res.json(result.rows[0]);
   } catch (err) {
     console.error('Error fetching wireless network:', err);
     res.status(500).json({ error: 'Failed to fetch wireless network' });
