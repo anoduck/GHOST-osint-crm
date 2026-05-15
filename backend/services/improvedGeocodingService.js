@@ -111,109 +111,119 @@ class ImprovedGeocodingService {
     }
   }
 
-  // Geocode using self-hosted Photon (OSM-backed, no API key required)
-  async geocodeWithPhoton(address) {
-    const photonUrl = process.env.PHOTON_URL || 'http://photon:2322';
+  // Geocode using Nominatim (public OSM geocoding service)
+  async geocodeWithNominatim(address) {
     try {
-      const url = `${photonUrl}/api?q=${encodeURIComponent(address)}&limit=5&lang=en`;
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=5&addressdetails=1`;
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'GHOST-OSINT-CRM/2.4 (https://github.com/elm1nst3r/GHOST-osint-crm)' }
+      });
       clearTimeout(timeout);
 
-      if (!response.ok) return null;
+      if (!response.ok) {
+        return { failure: 'service_error', message: `Geocoding service returned ${response.status}` };
+      }
+
       const data = await response.json();
 
-      if (data.features && data.features.length > 0) {
-        const best = data.features[0];
-        const [lon, lat] = best.geometry.coordinates; // GeoJSON is [lon, lat]
-        const props = best.properties;
-
-        return {
-          lat,
-          lng: lon,
-          confidence: this.calculatePhotonConfidence(best, address),
-          city: props.city || props.district,
-          state: props.state || props.county,
-          country: props.countrycode,
-          displayName: this.buildDisplayName(props),
-          provider: 'photon',
-          alternatives: data.features.slice(1, 3).map(f => ({
-            lat: f.geometry.coordinates[1],
-            lng: f.geometry.coordinates[0],
-            display_name: this.buildDisplayName(f.properties)
-          }))
-        };
+      if (!data || data.length === 0) {
+        return { failure: 'not_found', message: 'No results found for this address' };
       }
+
+      const best = data[0];
+      return {
+        lat: parseFloat(best.lat),
+        lng: parseFloat(best.lon),
+        confidence: this.calculateNominatimConfidence(best, address),
+        city: best.address?.city || best.address?.town || best.address?.village,
+        state: best.address?.state || best.address?.region,
+        country: best.address?.country_code?.toUpperCase(),
+        displayName: best.display_name,
+        provider: 'nominatim',
+        alternatives: data.slice(1, 4).map(alt => ({
+          lat: parseFloat(alt.lat),
+          lng: parseFloat(alt.lon),
+          display_name: alt.display_name
+        }))
+      };
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.error('Photon geocoding timeout for:', address);
-      } else {
-        console.error('Photon geocoding error:', error.message);
+        return { failure: 'timeout', message: 'Geocoding request timed out — check your connection or try a simpler address' };
       }
+      return { failure: 'service_error', message: 'Geocoding service is unreachable' };
     }
-    return null;
   }
 
-  // Build a human-readable display name from Photon properties
-  buildDisplayName(props) {
-    const parts = [
-      props.housenumber && props.street ? `${props.housenumber} ${props.street}` : props.street,
-      props.district,
-      props.city,
-      props.state,
-      props.country
-    ].filter(Boolean);
-    return parts.join(', ');
-  }
-
-  // Confidence based on Photon result type
-  calculatePhotonConfidence(feature, originalAddress) {
-    const props = feature.properties;
-    const typeScores = {
-      house: 95, street: 75, district: 60, city: 55,
-      county: 45, state: 35, country: 25
-    };
-    let score = typeScores[props.type] || 50;
-
+  // Calculate confidence from Nominatim result
+  calculateNominatimConfidence(result, originalAddress) {
+    if (!result.display_name || !originalAddress) return 30;
     const original = originalAddress.toLowerCase();
-    if (props.city && original.includes(props.city.toLowerCase())) score += 5;
-    if (props.street && original.includes(props.street.toLowerCase())) score += 5;
-    if (props.postcode && original.includes(props.postcode)) score += 5;
-
-    return Math.min(100, Math.max(0, score));
+    const returned = result.display_name.toLowerCase();
+    let score = 50;
+    const originalWords = original.split(/[\s,]+/).filter(w => w.length > 2);
+    const returnedWords = returned.split(/[\s,]+/);
+    const matches = originalWords.filter(word =>
+      returnedWords.some(rword => rword.includes(word) || word.includes(rword))
+    );
+    score += (matches.length / Math.max(originalWords.length, 1)) * 40;
+    if (result.importance) score += result.importance * 10;
+    return Math.min(100, Math.max(0, Math.round(score)));
   }
 
-  // Smart geocoding with fallbacks and validation
+
+  // Smart geocoding with failure reason propagation
   async geocodeAddress(address, options = {}) {
-    if (!address || address.trim() === '') return null;
+    if (!address || address.trim() === '') {
+      return { failure: 'empty', message: 'Address is empty' };
+    }
 
     const normalizedAddress = address.trim();
-    
+    const minConfidence = options.minConfidence || 30;
+
     // Check cache first
-    let cached = await this.getCachedCoordinates(normalizedAddress);
-    if (cached && cached.confidence > (options.minConfidence || 30)) {
+    const cached = await this.getCachedCoordinates(normalizedAddress);
+    if (cached && cached.confidence > minConfidence) {
       return cached;
     }
 
-    let result = await this.geocodeWithPhoton(normalizedAddress);
+    let result = await this.geocodeWithNominatim(normalizedAddress);
 
-    if (!result) {
-      // Try with simplified address if no results
-      const simplified = this.simplifyAddress(normalizedAddress);
-      if (simplified !== normalizedAddress) {
-        result = await this.geocodeWithPhoton(simplified);
-      }
-    }
-
-    if (result && result.confidence > (options.minConfidence || 30)) {
-      // Cache the result
-      await this.cacheCoordinates(normalizedAddress, result);
+    // If the service failed (timeout/error), return the failure immediately
+    if (result && result.failure && result.failure !== 'not_found') {
       return result;
     }
 
-    return null;
+    // If not found, try with simplified address
+    if (!result || result.failure === 'not_found') {
+      const simplified = this.simplifyAddress(normalizedAddress);
+      if (simplified !== normalizedAddress) {
+        const simplified_result = await this.geocodeWithNominatim(simplified);
+        if (simplified_result && !simplified_result.failure) {
+          result = simplified_result;
+        }
+      }
+    }
+
+    // Still no result
+    if (!result || result.failure) {
+      return result || { failure: 'not_found', message: 'No results found for this address' };
+    }
+
+    // Result found but confidence too low
+    if (result.confidence <= minConfidence) {
+      return {
+        failure: 'low_confidence',
+        message: `Match found but confidence is too low (${result.confidence}%). The address matched to: "${result.displayName}". Try adding more detail such as city or country.`,
+        best_match: result
+      };
+    }
+
+    await this.cacheCoordinates(normalizedAddress, result);
+    return result;
   }
 
   // Simplify address for better matching
@@ -297,35 +307,32 @@ class ImprovedGeocodingService {
   // Address suggestions for autocomplete
   async getSuggestions(query, limit = 5) {
     if (!query || query.length < 3) return [];
-    const photonUrl = process.env.PHOTON_URL || 'http://photon:2322';
 
     try {
-      const url = `${photonUrl}/api?q=${encodeURIComponent(query)}&limit=${limit}&lang=en`;
-      const response = await fetch(url);
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=${limit}&addressdetails=1`;
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'GHOST-OSINT-CRM/2.4 (https://github.com/elm1nst3r/GHOST-osint-crm)' }
+      });
       if (!response.ok) return [];
       const data = await response.json();
 
-      return (data.features || []).map(feature => {
-        const [lon, lat] = feature.geometry.coordinates;
-        const props = feature.properties;
-        return {
-          display_name: this.buildDisplayName(props),
-          address: {
-            street: props.housenumber && props.street
-              ? `${props.housenumber} ${props.street}`
-              : props.street,
-            city: props.city || props.district,
-            state: props.state,
-            country: props.country,
-            postal_code: props.postcode
-          },
-          lat,
-          lng: lon,
-          confidence: this.calculatePhotonConfidence(feature, query)
-        };
-      }).sort((a, b) => b.confidence - a.confidence);
+      return data.map(item => ({
+        display_name: item.display_name,
+        address: {
+          street: item.address?.house_number && item.address?.road
+            ? `${item.address.house_number} ${item.address.road}`
+            : item.address?.road,
+          city: item.address?.city || item.address?.town || item.address?.village,
+          state: item.address?.state || item.address?.region,
+          country: item.address?.country,
+          postal_code: item.address?.postcode
+        },
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon),
+        confidence: this.calculateNominatimConfidence(item, query)
+      })).sort((a, b) => b.confidence - a.confidence);
     } catch (error) {
-      console.error('Error getting address suggestions from Photon:', error.message);
+      console.error('Error getting address suggestions:', error.message);
       return [];
     }
   }

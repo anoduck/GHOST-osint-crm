@@ -119,18 +119,20 @@ const AddEditBusinessForm = ({ business, onSave, onCancel }) => {
       const data = await response.json();
 
       if (response.ok && data.lat) {
-        setFormData({
-          ...formData,
-          latitude: data.lat,
-          longitude: data.lng
-        });
+        setFormData({ ...formData, latitude: data.lat, longitude: data.lng });
         alert('Location geocoded successfully!');
       } else {
-        alert('Could not find coordinates for this address');
+        let msg = data.message || 'Could not find coordinates for this address.';
+        if (data.reason === 'not_found') {
+          msg += '\n\nTips:\n• Add city and country (e.g. "New York, USA")\n• Check for spelling mistakes';
+        } else if (data.reason === 'timeout') {
+          msg += '\n\nGeocoding timed out — check your connection and try again.';
+        }
+        alert(msg);
       }
     } catch (err) {
       console.error('Geocoding error:', err);
-      alert('Failed to geocode address');
+      alert('Geocoding service is unavailable. Check your connection.');
     }
   };
 

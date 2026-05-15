@@ -1311,11 +1311,18 @@ app.get('/api/geocode', requireAuth, async (req, res) => {
   if (!q || q.trim().length < 3) {
     return res.status(400).json({ error: 'Query must be at least 3 characters' });
   }
-  const coords = await geocodeAddress(q.trim());
-  if (!coords) {
-    return res.status(404).json({ error: 'No results found' });
+  if (!improvedGeocodingService) {
+    return res.status(503).json({ reason: 'service_error', message: 'Geocoding service not initialized' });
   }
-  res.json({ lat: coords.lat, lng: coords.lng });
+  const result = await improvedGeocodingService.geocodeAddress(q.trim());
+  if (result && !result.failure) {
+    res.json({ lat: result.lat, lng: result.lng });
+  } else {
+    res.status(404).json({
+      reason: result?.failure || 'not_found',
+      message: result?.message || 'No results found for this address'
+    });
+  }
 });
 
 // Get address suggestions for autocomplete
@@ -1353,17 +1360,15 @@ app.post('/api/geocode/address', async (req, res) => {
     }
     
     const result = await improvedGeocodingService.geocodeAddress(address, { minConfidence });
-    
-    if (result) {
-      res.json({
-        success: true,
-        result: result,
-        cached: result.cached || false
-      });
+
+    if (result && !result.failure) {
+      res.json({ success: true, result, cached: result.cached || false });
     } else {
       res.json({
         success: false,
-        message: 'No results found or confidence too low'
+        reason: result?.failure || 'unknown',
+        message: result?.message || 'Could not geocode this address',
+        best_match: result?.best_match || null
       });
     }
   } catch (err) {

@@ -288,10 +288,7 @@ Used cache: ${result.summary.cached}`);
           });
 
           if (addResponse.ok) {
-            alert(`Location added successfully!
-Address: ${newLocationData.address}
-Coordinates: ${geocodeResult.result.lat}, ${geocodeResult.result.lng}
-Confidence: ${geocodeResult.result.confidence}%`);
+            alert(`Location added successfully!\nAddress: ${newLocationData.address}\nCoordinates: ${geocodeResult.result.lat}, ${geocodeResult.result.lng}\nConfidence: ${geocodeResult.result.confidence}%`);
             setNewLocationData({ address: '', personId: null });
             setShowAddLocation(false);
             fetchPeople();
@@ -299,7 +296,16 @@ Confidence: ${geocodeResult.result.confidence}%`);
             alert('Location geocoded but failed to save. Please try adding it manually from the person\'s profile.');
           }
         } else {
-          alert('Could not geocode the address. Please try a more specific address.');
+          // Show the specific failure reason to the user
+          let msg = geocodeResult.message || 'Could not geocode this address.';
+          if (geocodeResult.best_match) {
+            msg += `\n\nDid you mean: "${geocodeResult.best_match.displayName}"?\nIf so, try a more complete address.`;
+          } else if (geocodeResult.reason === 'not_found') {
+            msg += '\n\nTips:\n• Add a city and country (e.g. "10 Downing St, London, UK")\n• Check for spelling mistakes\n• Try a postcode or zip code instead';
+          } else if (geocodeResult.reason === 'timeout') {
+            msg += '\n\nThe geocoding service did not respond. Check your internet connection and try again.';
+          }
+          alert(msg);
         }
       }
     } catch (error) {
