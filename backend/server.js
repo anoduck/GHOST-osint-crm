@@ -1026,8 +1026,34 @@ app.get('/api/locations', requireAuth, async (req, res) => {
       includeUngeocoded = false 
     } = req.query;
     
-    let query = `
-      SELECT 
+    let where = `WHERE p.locations IS NOT NULL AND p.locations != '[]'::jsonb`;
+    const params = [];
+    let paramIndex = 1;
+
+    // Add bounding box filter if provided
+    if (bbox) {
+      const [minLng, minLat, maxLng, maxLat] = bbox.split(',').map(Number);
+      where += ` AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(p.locations) AS loc
+        WHERE (loc->>'latitude')::float BETWEEN $${paramIndex++} AND $${paramIndex++}
+        AND (loc->>'longitude')::float BETWEEN $${paramIndex++} AND $${paramIndex++}
+      )`;
+      params.push(minLat, maxLat, minLng, maxLng);
+    }
+
+    // Filter by geocoding confidence if specified
+    if (!includeUngeocoded && confidence > 0) {
+      where += ` AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(p.locations) AS loc
+        WHERE (loc->>'latitude') IS NOT NULL
+        AND (loc->>'longitude') IS NOT NULL
+        AND COALESCE((loc->>'geocode_confidence')::int, 0) >= $${paramIndex++}
+      )`;
+      params.push(confidence);
+    }
+
+    const query = `
+      SELECT
         p.id,
         p.first_name,
         p.last_name,
@@ -1037,37 +1063,10 @@ app.get('/api/locations', requireAuth, async (req, res) => {
         p.connections,
         p.updated_at
       FROM people p
-      WHERE p.locations IS NOT NULL AND p.locations != '[]'::jsonb
+      ${where}
+      ORDER BY p.updated_at DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
-    
-    const params = [];
-    let paramIndex = 1;
-    
-    // Add bounding box filter if provided
-    if (bbox) {
-      const [minLng, minLat, maxLng, maxLat] = bbox.split(',').map(Number);
-      query += ` AND EXISTS (
-        SELECT 1 FROM jsonb_array_elements(p.locations) AS loc
-        WHERE (loc->>'latitude')::float BETWEEN $${paramIndex++} AND $${paramIndex++}
-        AND (loc->>'longitude')::float BETWEEN $${paramIndex++} AND $${paramIndex++}
-      )`;
-      params.push(minLat, maxLat, minLng, maxLng);
-    }
-    
-    // Filter by geocoding confidence if specified
-    if (!includeUngeocoded && confidence > 0) {
-      query += ` AND EXISTS (
-        SELECT 1 FROM jsonb_array_elements(p.locations) AS loc
-        WHERE (loc->>'latitude') IS NOT NULL 
-        AND (loc->>'longitude') IS NOT NULL
-        AND COALESCE((loc->>'geocode_confidence')::int, 0) >= $${paramIndex++}
-      )`;
-      params.push(confidence);
-    }
-    
-    // Add ordering and pagination
-    query += ` ORDER BY p.updated_at DESC`;
-    query += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
     params.push(parseInt(limit), parseInt(offset));
     
     const result = await pool.query(query, params);
@@ -1094,13 +1093,11 @@ app.get('/api/locations', requireAuth, async (req, res) => {
       };
     });
     
-    // Get total count for pagination
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM people p
-      WHERE p.locations IS NOT NULL AND p.locations != '[]'::jsonb
-    `;
-    const countResult = await pool.query(countQuery);
+    // Get total count — same filters, no LIMIT/OFFSET
+    const countResult = await pool.query(
+      `SELECT COUNT(*) as total FROM people p ${where}`,
+      params.slice(0, params.length - 2)
+    );
     
     res.json({
       data: processedRows,
@@ -1144,16 +1141,21 @@ app.post('/api/people/:id/travel-history', requireAuth, async (req, res) => {
     location_type, location_name, address, city, state, country, postal_code,
     latitude, longitude, arrival_date, departure_date, purpose, transportation_mode, notes
   } = req.body;
-  
+
+  const parsedArrival = arrival_date ? new Date(arrival_date) : null;
+  const parsedDeparture = departure_date ? new Date(departure_date) : null;
+  if (arrival_date && isNaN(parsedArrival)) return res.status(400).json({ error: 'Invalid arrival_date' });
+  if (departure_date && isNaN(parsedDeparture)) return res.status(400).json({ error: 'Invalid departure_date' });
+
   try {
     const result = await pool.query(
-      `INSERT INTO travel_history 
+      `INSERT INTO travel_history
        (person_id, location_type, location_name, address, city, state, country, postal_code,
         latitude, longitude, arrival_date, departure_date, purpose, transportation_mode, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [personId, location_type, location_name, address, city, state, country, postal_code,
-       latitude, longitude, arrival_date, departure_date, purpose, transportation_mode, notes]
+       latitude, longitude, parsedArrival, parsedDeparture, purpose, transportation_mode, notes]
     );
     
     res.status(201).json(result.rows[0]);
@@ -1340,10 +1342,15 @@ app.put('/api/travel-history/:id', requireAuth, async (req, res) => {
     location_type, location_name, address, city, state, country, postal_code,
     latitude, longitude, arrival_date, departure_date, purpose, transportation_mode, notes
   } = req.body;
-  
+
+  const parsedArrival = arrival_date ? new Date(arrival_date) : null;
+  const parsedDeparture = departure_date ? new Date(departure_date) : null;
+  if (arrival_date && isNaN(parsedArrival)) return res.status(400).json({ error: 'Invalid arrival_date' });
+  if (departure_date && isNaN(parsedDeparture)) return res.status(400).json({ error: 'Invalid departure_date' });
+
   try {
     const result = await pool.query(
-      `UPDATE travel_history 
+      `UPDATE travel_history
        SET location_type = $1, location_name = $2, address = $3, city = $4, state = $5,
            country = $6, postal_code = $7, latitude = $8, longitude = $9,
            arrival_date = $10, departure_date = $11, purpose = $12,
@@ -1351,7 +1358,7 @@ app.put('/api/travel-history/:id', requireAuth, async (req, res) => {
        WHERE id = $15
        RETURNING *`,
       [location_type, location_name, address, city, state, country, postal_code,
-       latitude, longitude, arrival_date, departure_date, purpose, transportation_mode, notes, travelId]
+       latitude, longitude, parsedArrival, parsedDeparture, purpose, transportation_mode, notes, travelId]
     );
     
     if (result.rows.length === 0) return res.status(404).json({ error: 'Travel record not found' });
@@ -2495,10 +2502,10 @@ app.post('/api/wireless-networks/import-kml', requireAuth, multer({ storage: mul
 
         // Parse description for details
         const descLines = description.split('\n');
-        let bssid = '', encryption = 'Unknown', signal = null, accuracy = null, timestamp = null, networkType = 'WIFI';
+        let bssid = null, encryption = 'Unknown', signal = null, accuracy = null, timestamp = null, networkType = 'WIFI';
 
         descLines.forEach(line => {
-          if (line.includes('Network ID:')) bssid = line.split('Network ID:')[1].trim();
+          if (line.includes('Network ID:')) bssid = line.split('Network ID:')[1].trim() || null;
           if (line.includes('Encryption:')) encryption = line.split('Encryption:')[1].trim();
           if (line.includes('Signal:')) signal = parseFloat(line.split('Signal:')[1].trim());
           if (line.includes('Accuracy:')) accuracy = parseFloat(line.split('Accuracy:')[1].trim());
@@ -2594,23 +2601,26 @@ app.get('/api/wireless-networks/stats', requireAuth, async (req, res) => {
 // Search for networks near a location
 app.get('/api/wireless-networks/nearby', requireAuth, async (req, res) => {
   try {
-    const { latitude, longitude, radius = 0.5 } = req.query; // radius in km
+    const lat = parseFloat(req.query.latitude);
+    const lng = parseFloat(req.query.longitude);
+    const radius = parseFloat(req.query.radius) || 0.5;
 
-    if (!latitude || !longitude) {
-      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    if (isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({ error: 'Valid latitude and longitude are required' });
+    }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ error: 'Latitude must be -90 to 90, longitude -180 to 180' });
     }
 
-    // Simple bounding box search (for accurate distance, use PostGIS)
-    const latDelta = parseFloat(radius) / 111.0; // 1 degree lat ≈ 111km
-    const lonDelta = parseFloat(radius) / (111.0 * Math.cos(parseFloat(latitude) * Math.PI / 180));
+    const latDelta = radius / 111.0;
+    const lonDelta = radius / (111.0 * Math.cos(lat * Math.PI / 180));
 
     const result = await pool.query(
       `SELECT * FROM wireless_networks
        WHERE latitude BETWEEN $1 AND $2
        AND longitude BETWEEN $3 AND $4
        ORDER BY scan_date DESC`,
-      [parseFloat(latitude) - latDelta, parseFloat(latitude) + latDelta,
-       parseFloat(longitude) - lonDelta, parseFloat(longitude) + lonDelta]
+      [lat - latDelta, lat + latDelta, lng - lonDelta, lng + lonDelta]
     );
 
     res.json(result.rows);

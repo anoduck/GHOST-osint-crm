@@ -21,12 +21,17 @@ async function geocodeAddress(address) {
     console.log(`Geocoding address: ${address}`);
     const query = encodeURIComponent(address);
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`;
-    
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     const response = await fetch(url, {
+      signal: controller.signal,
       headers: {
-        'User-Agent': 'OSINT-CRM/1.0 (https://github.com/yourusername/osint-crm)' // Update this
+        'User-Agent': 'OSINT-CRM/1.0 (https://github.com/elm1nst3r/GHOST-osint-crm)'
       }
     });
+    clearTimeout(timeout);
 
     if (!response.ok) {
       console.error(`Geocoding API error: ${response.status} ${response.statusText}`);
