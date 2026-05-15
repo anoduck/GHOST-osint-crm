@@ -88,38 +88,28 @@ The easiest way to run GHOST is with Docker:
 git clone <repo-url>
 cd GHOST-osint-crm
 
-# Copy environment file and configure it
-cp .env.example .env
-
-# IMPORTANT: Edit .env with your configuration
-# For production, you MUST set:
-# - DB_PASSWORD (strong password)
-# - SESSION_SECRET (generate with: openssl rand -base64 32)
-# - FRONTEND_URL (your frontend URL)
-nano .env
+# Generate .env with secure random credentials
+printf "DB_PASSWORD=$(openssl rand -base64 24)\nSESSION_SECRET=$(openssl rand -base64 32)\nDB_USER=postgres\nDB_NAME=osint_crm_db\nDB_HOST=db\nDB_PORT=5432\nNODE_ENV=development\nPORT=3001\nFRONTEND_URL=http://localhost:8080\n" > .env
 
 # Start all services
-docker-compose up --build -d
+docker compose up --build -d
 ```
 
 **Create your first admin user:**
 ```bash
 # After containers are running
-docker exec -it osint-crm-backend node scripts/createAdminUser.js
+docker exec osint-crm-backend node scripts/createAdminSimple.js <username> <password> [email]
 
-# Follow the prompts:
-# - Username: (required)
-# - Email: (optional - press Enter to skip)
-# - Password: (required)
-# - First Name: (optional)
-# - Last Name: (optional)
+# Example:
+docker exec osint-crm-backend node scripts/createAdminSimple.js admin MyStr0ngPass!
 ```
+
+Password must be at least 12 characters. Common weak passwords are rejected.
 
 **Access the application:**
 - Frontend: http://localhost:8080
 - Backend API: http://localhost:3001
 - Health Check: http://localhost:3001/api/health
-- Database: PostgreSQL on port 5432 (development only)
 
 ## 📋 Prerequisites
 
@@ -177,7 +167,7 @@ GHOST-osint-crm/
 │   ├── server.js          # Main server file
 │   ├── migrations/        # Database migrations
 │   └── public/uploads/    # File uploads
-├── docker-compose.yml     # Docker configuration
+├── docker compose.yml     # Docker configuration
 └── .env.example           # Environment template
 ```
 
@@ -235,26 +225,24 @@ GHOST-osint-crm/
 
 ## 🔐 Security Considerations
 
-**Critical - Production Deployment:**
-- ⚠️ **Never use default passwords in production** - Application will refuse to start
-- ⚠️ **Generate strong SESSION_SECRET** - Minimum 32 characters required
+**Required in all environments:**
+- ⚠️ **SESSION_SECRET** — mandatory, minimum 32 characters. App exits at startup if missing.
   ```bash
-  # Generate a secure secret
   openssl rand -base64 32
   ```
-- ⚠️ **Set FRONTEND_URL** - Required for CORS security
-- ⚠️ **Use strong DB_PASSWORD** - Weak passwords rejected in production
-- 🔒 **Remove database port exposure** - Comment out port mapping in `docker-compose.yml` for production
-- 🔒 **Never commit `.env` files** - Contains sensitive credentials
-- 🔒 **Keep `backend/public/uploads/` out of version control** - User-generated content
-- 🔒 **Review uploaded files for security** - Implement malware scanning if needed
-- 🔒 **Follow local laws for data collection** - Comply with privacy regulations
-- 🔒 **Use HTTPS in production** - Configure reverse proxy with SSL/TLS
-- 🔒 **Regular security updates** - Keep dependencies updated
+- ⚠️ **DB_PASSWORD** — no default. Must be set in `.env` before starting.
+  ```bash
+  openssl rand -base64 24
+  ```
 
-**Development vs Production:**
-- Development mode shows warnings for weak credentials
-- Production mode enforces security requirements and exits if not met
+**Production hardening:**
+- ⚠️ **Use strong DB_PASSWORD** — weak passwords (`changeme`, `password`, etc.) are rejected at startup
+- 🔒 **PostgreSQL is not exposed to the host network** by default — only available within the Docker network
+- 🔒 **Session cookies use `SameSite=Strict` and `HttpOnly`** — enable `secure: true` by setting `NODE_ENV=production`
+- 🔒 **Never commit `.env` files** — contains sensitive credentials
+- 🔒 **Use HTTPS in production** — configure a reverse proxy with SSL/TLS
+- 🔒 **Keep `backend/public/uploads/` out of version control** — user-generated content
+- 🔒 **Follow local laws for data collection** — comply with privacy regulations
 
 ## 🤝 Contributing
 
@@ -304,8 +292,8 @@ The authors are not responsible for misuse of this software.
 This has been fixed in v2.1.0. The users table is now created automatically.
 ```bash
 # Rebuild containers to apply fix
-docker-compose down -v
-docker-compose up --build
+docker compose down -v
+docker compose up --build
 ```
 
 ### Issue: Application won't start in production
@@ -327,15 +315,15 @@ chmod -R 777 backend/public/uploads/
 
 1. **Check service health:**
    ```bash
-   docker-compose ps
+   docker compose ps
    # All services should show (healthy)
    ```
 
 2. **View logs:**
    ```bash
-   docker-compose logs backend
-   docker-compose logs frontend
-   docker-compose logs db
+   docker compose logs backend
+   docker compose logs frontend
+   docker compose logs db
    ```
 
 3. **Check health endpoint:**
@@ -350,8 +338,8 @@ chmod -R 777 backend/public/uploads/
 
 5. **Clean restart:**
    ```bash
-   docker-compose down -v  # WARNING: Deletes all data
-   docker-compose up --build
+   docker compose down -v  # WARNING: Deletes all data
+   docker compose up --build
    ```
 
 6. **Check browser console** for frontend errors
@@ -379,6 +367,7 @@ Feedback, inputs, and suggestions are highly welcome! Please open an issue or re
 - Node.js / Express
 - PostgreSQL 15
 - xml2js (KML parsing)
+- papaparse (CSV parsing)
 
 **Infrastructure:**
 - Docker & Docker Compose
@@ -387,6 +376,24 @@ Feedback, inputs, and suggestions are highly welcome! Please open an issue or re
 ---
 
 ## 📋 Recent Changes
+
+### Version 2.3.0 (May 2026)
+- 🔒 **Security hardening** — 15 vulnerabilities addressed: unauthenticated routes locked down, SQL injection in sort parameter fixed, Docker control endpoints removed, session cookie hardened with `SameSite=Strict`
+- 🔒 **Secrets management** — `SESSION_SECRET` and `DB_PASSWORD` are now mandatory with no fallback defaults; app exits at startup if missing
+- 🔒 **Docker hardening** — production `NODE_ENV` in compose, PostgreSQL no longer exposed to host network by default
+- 🔒 **SVG upload blocked** — logo upload restricted to jpeg/png/gif only
+- 🔒 **Wireless network passwords masked** — passwords excluded from API responses and masked in map popups
+- 🐛 **Fixed wireless network route collision** — `/stats` endpoint no longer captured by `/:id` handler
+- 🐛 **Fixed alias search** — variable shadowing bug in SQL query corrected
+- 🐛 **Fixed locations pagination** — `hasMore` now correctly reflects active filters
+- 🐛 **Fixed KML re-import** — empty BSSID stored as NULL instead of empty string
+- 🐛 **Fixed business owner links after import** — `owner_person_id` now remapped correctly
+- 🐛 **Fixed CSV import** — replaced naive `split(',')` with papaparse; quoted fields and embedded commas now handled
+- 🐛 **Import resilience** — one bad record no longer rolls back the entire import
+- 🐛 **Travel history date validation** — invalid dates return 400 instead of a DB error
+- 🐛 **Geocoding timeout** — Nominatim requests now have an 8s timeout
+- ✨ **Audit log improved** — changes to locations, connections, and OSINT data fields now recorded
+- ✨ **Advanced search capped** — results limited to 500 rows to prevent memory issues
 
 ### Version 2.2.0 (January 2026)
 - 🛜 **Manual wireless network entry** - Add networks manually with comprehensive forms
@@ -413,5 +420,5 @@ See [CHANGELOG.md](CHANGELOG.md) for complete details.
 
 Built with ❤️ for the OSINT community.
 
-**Version:** 2.2.0
-**Last Updated:** January 28, 2026
+**Version:** 2.3.0
+**Last Updated:** May 15, 2026
