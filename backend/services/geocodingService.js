@@ -17,47 +17,42 @@ async function geocodeAddress(address) {
     return geocodeCache.get(cacheKey);
   }
 
+  const photonUrl = process.env.PHOTON_URL || 'http://photon:2322';
+
   try {
     console.log(`Geocoding address: ${address}`);
-    const query = encodeURIComponent(address);
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`;
+    const url = `${photonUrl}/api?q=${encodeURIComponent(address)}&limit=1&lang=en`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'OSINT-CRM/1.0 (https://github.com/elm1nst3r/GHOST-osint-crm)'
-      }
-    });
+    const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
 
     if (!response.ok) {
-      console.error(`Geocoding API error: ${response.status} ${response.statusText}`);
+      console.error(`Photon geocoding error: ${response.status} ${response.statusText}`);
       return null;
     }
 
     const data = await response.json();
-    
-    if (data && data.length > 0) {
-      const result = {
-        lat: parseFloat(data[0].lat),
-        lng: parseFloat(data[0].lon)
-      };
-      
-      console.log(`Geocoded successfully: ${address} -> ${result.lat}, ${result.lng}`);
-      
-      // Cache the result
+
+    if (data.features && data.features.length > 0) {
+      const [lon, lat] = data.features[0].geometry.coordinates; // GeoJSON: [lon, lat]
+      const result = { lat, lng: lon };
+
+      console.log(`Geocoded successfully: ${address} -> ${lat}, ${lon}`);
       geocodeCache.set(cacheKey, result);
-      
       return result;
     }
-    
+
     console.log(`No results found for address: ${address}`);
     return null;
   } catch (error) {
-    console.error('Geocoding error:', error);
+    if (error.name === 'AbortError') {
+      console.error('Geocoding timeout for:', address);
+    } else {
+      console.error('Geocoding error:', error.message);
+    }
     return null;
   }
 }

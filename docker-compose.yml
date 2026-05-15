@@ -40,6 +40,7 @@ services:
       DB_NAME: ${DB_NAME:-osint_crm_db}
       DB_PORT: 5432
       SESSION_SECRET: ${SESSION_SECRET}
+      PHOTON_URL: http://photon:2322
     volumes:
       - ./backend/public:/usr/src/app/public
     restart: unless-stopped
@@ -50,6 +51,7 @@ services:
       - osint-crm-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+
       interval: 30s
       timeout: 10s
       retries: 3
@@ -74,11 +76,31 @@ services:
       timeout: 5s
       retries: 5
 
+  # Photon geocoder (self-hosted, no API key required)
+  # Downloads the global geocoding index on first start (~1.8GB, one-time).
+  photon:
+    build:
+      context: ./photon
+      dockerfile: Dockerfile
+    container_name: osint-crm-photon
+    volumes:
+      - photon_data:/photon/photon_data
+    restart: unless-stopped
+    networks:
+      - osint-crm-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2322/api?q=test"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
+
 # Define a network for the services to communicate
 networks:
   osint-crm-network:
     driver: bridge
 
-# Define a named volume for persistent PostgreSQL data
+# Define named volumes for persistent data
 volumes:
   postgres_data:
+  photon_data:

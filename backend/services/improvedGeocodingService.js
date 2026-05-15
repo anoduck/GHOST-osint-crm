@@ -103,76 +103,86 @@ class ImprovedGeocodingService {
           updated_at = CURRENT_TIMESTAMP
       `, [
         hash, address, normalized, result.lat, result.lng, 
-        result.confidence || 50, result.city || null, result.state || null, 
-        result.country || null, result.provider || 'nominatim'
+        result.confidence || 50, result.city || null, result.state || null,
+        result.country || null, result.provider || 'photon'
       ]);
     } catch (error) {
       console.error('Error caching coordinates:', error);
     }
   }
 
-  // Multiple geocoding providers for better coverage
-  async geocodeWithNominatim(address) {
+  // Geocode using self-hosted Photon (OSM-backed, no API key required)
+  async geocodeWithPhoton(address) {
+    const photonUrl = process.env.PHOTON_URL || 'http://photon:2322';
     try {
-      const query = encodeURIComponent(address);
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=5&addressdetails=1`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'GHOST-OSINT-CRM/2.0 (OSINT Investigation Tool)'
-        }
-      });
+      const url = `${photonUrl}/api?q=${encodeURIComponent(address)}&limit=5&lang=en`;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
 
       if (!response.ok) return null;
       const data = await response.json();
-      
-      if (data && data.length > 0) {
-        const best = data[0];
+
+      if (data.features && data.features.length > 0) {
+        const best = data.features[0];
+        const [lon, lat] = best.geometry.coordinates; // GeoJSON is [lon, lat]
+        const props = best.properties;
+
         return {
-          lat: parseFloat(best.lat),
-          lng: parseFloat(best.lon),
-          confidence: this.calculateConfidence(best, address),
-          city: best.address?.city || best.address?.town || best.address?.village,
-          state: best.address?.state || best.address?.region,
-          country: best.address?.country_code?.toUpperCase(),
-          provider: 'nominatim',
-          alternatives: data.slice(1, 3).map(alt => ({
-            lat: parseFloat(alt.lat),
-            lng: parseFloat(alt.lon),
-            display_name: alt.display_name
+          lat,
+          lng: lon,
+          confidence: this.calculatePhotonConfidence(best, address),
+          city: props.city || props.district,
+          state: props.state || props.county,
+          country: props.countrycode,
+          displayName: this.buildDisplayName(props),
+          provider: 'photon',
+          alternatives: data.features.slice(1, 3).map(f => ({
+            lat: f.geometry.coordinates[1],
+            lng: f.geometry.coordinates[0],
+            display_name: this.buildDisplayName(f.properties)
           }))
         };
       }
     } catch (error) {
-      console.error('Nominatim geocoding error:', error);
+      if (error.name === 'AbortError') {
+        console.error('Photon geocoding timeout for:', address);
+      } else {
+        console.error('Photon geocoding error:', error.message);
+      }
     }
     return null;
   }
 
-  // Calculate confidence score based on address matching
-  calculateConfidence(result, originalAddress) {
-    if (!result.display_name || !originalAddress) return 30;
-    
+  // Build a human-readable display name from Photon properties
+  buildDisplayName(props) {
+    const parts = [
+      props.housenumber && props.street ? `${props.housenumber} ${props.street}` : props.street,
+      props.district,
+      props.city,
+      props.state,
+      props.country
+    ].filter(Boolean);
+    return parts.join(', ');
+  }
+
+  // Confidence based on Photon result type
+  calculatePhotonConfidence(feature, originalAddress) {
+    const props = feature.properties;
+    const typeScores = {
+      house: 95, street: 75, district: 60, city: 55,
+      county: 45, state: 35, country: 25
+    };
+    let score = typeScores[props.type] || 50;
+
     const original = originalAddress.toLowerCase();
-    const returned = result.display_name.toLowerCase();
-    
-    let score = 50; // Base score
-    
-    // Check for exact components
-    const originalWords = original.split(/[\s,]+/).filter(w => w.length > 2);
-    const returnedWords = returned.split(/[\s,]+/);
-    
-    const matches = originalWords.filter(word => 
-      returnedWords.some(rword => rword.includes(word) || word.includes(rword))
-    );
-    
-    score += (matches.length / originalWords.length) * 40;
-    
-    // Penalty for very generic addresses
-    if (result.class === 'place' && result.type === 'village') score -= 10;
-    if (result.importance) score += result.importance * 10;
-    
-    return Math.min(100, Math.max(0, Math.round(score)));
+    if (props.city && original.includes(props.city.toLowerCase())) score += 5;
+    if (props.street && original.includes(props.street.toLowerCase())) score += 5;
+    if (props.postcode && original.includes(props.postcode)) score += 5;
+
+    return Math.min(100, Math.max(0, score));
   }
 
   // Smart geocoding with fallbacks and validation
@@ -187,17 +197,13 @@ class ImprovedGeocodingService {
       return cached;
     }
 
-    // Try geocoding with rate limiting
-    await this.rateLimitDelay();
-    
-    let result = await this.geocodeWithNominatim(normalizedAddress);
-    
+    let result = await this.geocodeWithPhoton(normalizedAddress);
+
     if (!result) {
       // Try with simplified address if no results
       const simplified = this.simplifyAddress(normalizedAddress);
       if (simplified !== normalizedAddress) {
-        await this.rateLimitDelay();
-        result = await this.geocodeWithNominatim(simplified);
+        result = await this.geocodeWithPhoton(simplified);
       }
     }
 
@@ -217,12 +223,6 @@ class ImprovedGeocodingService {
       .replace(/\b\d+[a-z]?\s+(st|nd|rd|th)\s+/i, '') // Remove ordinal street numbers
       .replace(/\s+floor\s*\d+.*$/i, '') // Remove floor numbers
       .trim();
-  }
-
-  // Rate limiting for API calls
-  async rateLimitDelay() {
-    const delay = 1000; // 1 second between calls
-    await new Promise(resolve => setTimeout(resolve, delay));
   }
 
   // Batch geocode with smart processing
@@ -297,36 +297,35 @@ class ImprovedGeocodingService {
   // Address suggestions for autocomplete
   async getSuggestions(query, limit = 5) {
     if (!query || query.length < 3) return [];
-    
-    try {
-      const encodedQuery = encodeURIComponent(query);
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodedQuery}&limit=${limit}&addressdetails=1`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'GHOST-OSINT-CRM/2.0 (OSINT Investigation Tool)'
-        }
-      });
+    const photonUrl = process.env.PHOTON_URL || 'http://photon:2322';
 
+    try {
+      const url = `${photonUrl}/api?q=${encodeURIComponent(query)}&limit=${limit}&lang=en`;
+      const response = await fetch(url);
       if (!response.ok) return [];
       const data = await response.json();
-      
-      return data.map(item => ({
-        display_name: item.display_name,
-        address: {
-          street: item.address?.house_number && item.address?.road ? 
-            `${item.address.house_number} ${item.address.road}` : item.address?.road,
-          city: item.address?.city || item.address?.town || item.address?.village,
-          state: item.address?.state || item.address?.region,
-          country: item.address?.country,
-          postal_code: item.address?.postcode
-        },
-        lat: parseFloat(item.lat),
-        lng: parseFloat(item.lon),
-        confidence: this.calculateConfidence(item, query)
-      })).sort((a, b) => b.confidence - a.confidence);
+
+      return (data.features || []).map(feature => {
+        const [lon, lat] = feature.geometry.coordinates;
+        const props = feature.properties;
+        return {
+          display_name: this.buildDisplayName(props),
+          address: {
+            street: props.housenumber && props.street
+              ? `${props.housenumber} ${props.street}`
+              : props.street,
+            city: props.city || props.district,
+            state: props.state,
+            country: props.country,
+            postal_code: props.postcode
+          },
+          lat,
+          lng: lon,
+          confidence: this.calculatePhotonConfidence(feature, query)
+        };
+      }).sort((a, b) => b.confidence - a.confidence);
     } catch (error) {
-      console.error('Error getting address suggestions:', error);
+      console.error('Error getting address suggestions from Photon:', error.message);
       return [];
     }
   }
