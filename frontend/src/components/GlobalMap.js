@@ -655,7 +655,7 @@ Confidence: ${geocodeResult.result.confidence}%`);
                           <p className="text-sm"><span className="font-medium">Signal:</span> {marker.signalStrength} dBm</p>
                         )}
                         {marker.password && (
-                          <p className="text-sm"><span className="font-medium">Password:</span> {marker.password}</p>
+                          <p className="text-sm"><span className="font-medium">Password:</span> ••••••••</p>
                         )}
                         {marker.areaName && (
                           <p className="text-sm text-gray-600 dark:text-gray-400">{marker.areaName}</p>

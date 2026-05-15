@@ -421,7 +421,7 @@ const SettingsPage = ({ appSettings, customFields, fetchCustomFields, handleAppN
                         <input
                           ref={fileInputRef}
                           type="file"
-                          accept="image/png,image/jpeg,image/gif,image/svg+xml"
+                          accept="image/png,image/jpeg,image/gif"
                           onChange={handleLogoUpload}
                           className="hidden"
                         />

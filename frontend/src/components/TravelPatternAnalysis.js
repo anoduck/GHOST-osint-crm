@@ -114,15 +114,16 @@ const TravelPatternAnalysis = ({ personId, personName }) => {
 
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`
+        `/api/geocode?q=${encodeURIComponent(query)}`,
+        { credentials: 'include' }
       );
       const data = await response.json();
-      
-      if (data && data.length > 0) {
+
+      if (response.ok && data.lat) {
         setFormData({
           ...formData,
-          latitude: parseFloat(data[0].lat),
-          longitude: parseFloat(data[0].lon)
+          latitude: data.lat,
+          longitude: data.lng
         });
         alert('Location geocoded successfully!');
       } else {

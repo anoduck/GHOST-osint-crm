@@ -74,16 +74,18 @@ async function batchGeocode(locations, delay = 1500) { // Increased delay to be 
       continue;
     }
     
+    const cacheKey = addressParts.toLowerCase().trim();
+    const wasCached = geocodeCache.has(cacheKey);
     const coords = await geocodeAddress(addressParts);
-    
+
     results.push({
       ...location,
       latitude: coords?.lat || location.latitude,
       longitude: coords?.lng || location.longitude
     });
-    
-    // Rate limiting - only wait if we actually made an API call (not cached)
-    if (coords && !geocodeCache.has(addressParts.toLowerCase().trim())) {
+
+    // Rate limiting — only wait if we actually hit the API (not served from cache)
+    if (!wasCached) {
       console.log(`Waiting ${delay}ms before next geocoding request...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }

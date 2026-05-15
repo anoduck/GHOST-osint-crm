@@ -53,7 +53,7 @@ const logoUpload = multer({
   storage: logoStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: function (req, file, cb) {
-    checkFileType(file, /jpeg|jpg|png|gif|svg/, cb);
+    checkFileType(file, /jpeg|jpg|png|gif/, cb);
   }
 });
 
@@ -63,43 +63,41 @@ function checkFileType(file, filetypes, cb) {
   if (mimetype && extname) {
     return cb(null, true);
   } else {
-    cb('Error: Images Only (jpeg, jpg, png, gif, svg)!');
+    cb('Error: Images Only (jpeg, jpg, png, gif)!');
   }
 }
 
-// Validate critical environment variables in production
-if (process.env.NODE_ENV === 'production') {
-  const requiredEnvVars = ['DB_PASSWORD', 'SESSION_SECRET'];
-  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+// Validate critical environment variables — required in all environments
+const requiredEnvVars = ['SESSION_SECRET'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingVars.length > 0) {
+  console.error('CRITICAL ERROR: Missing required environment variables:');
+  missingVars.forEach(varName => console.error(`  - ${varName}`));
+  process.exit(1);
+}
 
-  if (missingVars.length > 0) {
-    console.error('CRITICAL ERROR: Missing required environment variables in production:');
-    missingVars.forEach(varName => console.error(`  - ${varName}`));
-    console.error('Application cannot start without these variables.');
+if (process.env.SESSION_SECRET.length < 32) {
+  console.error('CRITICAL ERROR: SESSION_SECRET must be at least 32 characters long.');
+  process.exit(1);
+}
+
+// Additional production hardening checks
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.DB_PASSWORD) {
+    console.error('CRITICAL ERROR: DB_PASSWORD is required in production.');
     process.exit(1);
   }
 
-  // Validate password strength
   const weakPasswords = ['changeme', 'password', 'admin', 'postgres', '12345678'];
   if (weakPasswords.includes(process.env.DB_PASSWORD.toLowerCase())) {
     console.error('CRITICAL ERROR: DB_PASSWORD is too weak for production use.');
-    console.error('Please use a strong, randomly generated password.');
-    process.exit(1);
-  }
-
-  if (process.env.SESSION_SECRET.length < 32) {
-    console.error('CRITICAL ERROR: SESSION_SECRET must be at least 32 characters long.');
     process.exit(1);
   }
 }
 
-// Warn about default values in development
 if (process.env.NODE_ENV !== 'production') {
   if (!process.env.DB_PASSWORD || process.env.DB_PASSWORD === 'changeme') {
-    console.warn('WARNING: Using default database password. This is acceptable for development but NOT for production.');
-  }
-  if (!process.env.SESSION_SECRET) {
-    console.warn('WARNING: Using default session secret. This is acceptable for development but NOT for production.');
+    console.warn('WARNING: Using default database password. Do NOT use in production.');
   }
 }
 
@@ -107,7 +105,7 @@ const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   host: process.env.DB_HOST || 'db',
   database: process.env.DB_NAME || 'osint_crm_db',
-  password: process.env.DB_PASSWORD || 'changeme',
+  password: process.env.DB_PASSWORD,
   port: parseInt(process.env.DB_PORT || '5432', 10),
 });
 
@@ -519,12 +517,13 @@ app.use(session({
     tableName: 'user_sessions',
     createTableIfMissing: true
   }),
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
+    sameSite: 'strict',
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
   }
 }));
@@ -582,11 +581,11 @@ app.get('/api/health', async (req, res) => {
       database: 'connected'
     });
   } catch (error) {
+    console.error('Health check failed:', error.message);
     res.status(503).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
-      database: 'disconnected',
-      error: error.message
+      database: 'disconnected'
     });
   }
 });
@@ -645,7 +644,7 @@ app.get('/api/search', requireAuth, async (req, res) => {
 });
 
 // Advanced search endpoint
-app.get('/api/search/advanced', async (req, res) => {
+app.get('/api/search/advanced', requireAuth, async (req, res) => {
   try {
     let query = 'SELECT * FROM people WHERE 1=1';
     const queryParams = [];
@@ -711,8 +710,9 @@ app.get('/api/search/advanced', async (req, res) => {
       queryParams.push(req.query.dateTo);
     }
 
-    // Sorting
-    const sortBy = req.query.sortBy || 'updated_at';
+    // Sorting — allowlist to prevent SQL injection via ORDER BY interpolation
+    const allowedSortColumns = ['updated_at', 'created_at', 'first_name', 'last_name', 'status', 'category'];
+    const sortBy = allowedSortColumns.includes(req.query.sortBy) ? req.query.sortBy : 'updated_at';
     const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
     query += ` ORDER BY ${sortBy} ${sortOrder}`;
 
@@ -1014,7 +1014,7 @@ app.delete('/api/people/:id', requireAuth, async (req, res) => {
 });
 
 // Get all locations for map view with progressive loading and optimizations
-app.get('/api/locations', async (req, res) => {
+app.get('/api/locations', requireAuth, async (req, res) => {
   try {
     const { 
       limit = 100, 
@@ -1162,7 +1162,7 @@ app.post('/api/people/:id/travel-history', requireAuth, async (req, res) => {
 });
 
 // Batch geocode all locations missing coordinates
-app.post('/api/geocode/batch', async (req, res) => {
+app.post('/api/geocode/batch', requireAuth, requireAdmin, async (req, res) => {
   try {
     // Get all people with locations
     const peopleResult = await pool.query(`
@@ -1213,6 +1213,19 @@ app.post('/api/geocode/batch', async (req, res) => {
 });
 
 // Improved geocoding endpoints
+
+// Single-address geocode — used by frontend components to avoid direct Nominatim calls
+app.get('/api/geocode', requireAuth, async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 3) {
+    return res.status(400).json({ error: 'Query must be at least 3 characters' });
+  }
+  const coords = await geocodeAddress(q.trim());
+  if (!coords) {
+    return res.status(404).json({ error: 'No results found' });
+  }
+  res.json({ lat: coords.lat, lng: coords.lng });
+});
 
 // Get address suggestions for autocomplete
 app.get('/api/geocode/suggestions', async (req, res) => {
@@ -1269,7 +1282,7 @@ app.post('/api/geocode/address', async (req, res) => {
 });
 
 // Enhanced batch geocoding with improved service
-app.post('/api/geocode/batch-enhanced', async (req, res) => {
+app.post('/api/geocode/batch-enhanced', requireAuth, requireAdmin, async (req, res) => {
   const { locations, minConfidence = 30, maxConcurrent = 3 } = req.body;
   
   if (!locations || !Array.isArray(locations)) {
@@ -1699,7 +1712,7 @@ app.delete('/api/settings/model-options/:id', requireAdmin, async (req, res) => 
 });
 
 // Audit log endpoints
-app.get('/api/audit-logs', async (req, res) => {
+app.get('/api/audit-logs', requireAuth, requireAdmin, async (req, res) => {
   const { entity_type, entity_id, limit = 100, offset = 0 } = req.query;
   
   try {
@@ -1978,62 +1991,7 @@ app.post('/api/import', requireAdmin, async (req, res) => {
   }
 });
 
-// Docker control endpoints
-let dockerLogs = [];
-const MAX_LOG_ENTRIES = 1000;
-
-app.get('/api/docker/status', async (req, res) => {
-  try {
-    const { stdout } = await execPromise('docker-compose ps --format json');
-    const containers = stdout.split('\n').filter(line => line).map(line => JSON.parse(line));
-    res.json({ status: 'running', containers });
-  } catch (err) {
-    res.json({ status: 'error', error: err.message });
-  }
-});
-
-app.post('/api/docker/restart', async (req, res) => {
-  try {
-    await execPromise('docker-compose restart');
-    dockerLogs.push({
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      message: 'Docker containers restarted'
-    });
-    res.json({ message: 'Containers restarted successfully' });
-  } catch (err) {
-    console.error('Error restarting containers:', err);
-    res.status(500).json({ error: 'Failed to restart containers' });
-  }
-});
-
-app.post('/api/docker/stop', async (req, res) => {
-  try {
-    await execPromise('docker-compose stop');
-    dockerLogs.push({
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      message: 'Docker containers stopped'
-    });
-    res.json({ message: 'Containers stopped successfully' });
-  } catch (err) {
-    console.error('Error stopping containers:', err);
-    res.status(500).json({ error: 'Failed to stop containers' });
-  }
-});
-
-app.get('/api/docker/logs', async (req, res) => {
-  try {
-    const { stdout } = await execPromise('docker-compose logs --tail=100 --no-color');
-    const logs = stdout.split('\n').map(line => ({
-      timestamp: new Date().toISOString(),
-      message: line
-    }));
-    res.json(logs);
-  } catch (err) {
-    res.json([]);
-  }
-});
+// Docker control endpoints removed — shell-backed container management must not be exposed via the application API.
 
 // Businesses endpoints
 app.get('/api/businesses', requireAuth, async (req, res) => {
@@ -2246,7 +2204,7 @@ app.delete('/api/businesses/:id', requireAuth, async (req, res) => {
 });
 
 // System Health endpoint
-app.get('/api/system/health', async (req, res) => {
+app.get('/api/system/health', requireAuth, requireAdmin, async (req, res) => {
   try {
     const health = {
       status: 'healthy',
@@ -2303,8 +2261,7 @@ app.get('/api/system/health', async (req, res) => {
     console.error('Error getting system health:', err);
     res.status(500).json({
       status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: err.message
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -2316,7 +2273,7 @@ app.get('/api/wireless-networks', requireAuth, async (req, res) => {
   try {
     const { person_id, ssid, bssid, network_type, encryption, import_source, signal_min, signal_max } = req.query;
 
-    let query = 'SELECT * FROM wireless_networks WHERE 1=1';
+    let query = 'SELECT id, ssid, bssid, latitude, longitude, accuracy, encryption, signal_strength, frequency, channel, network_type, confidence_level, first_seen, last_seen, scan_date, person_id, association_note, association_confidence, import_source, notes, tags, area_name, associated_person_ids, associated_business_ids, created_at, updated_at FROM wireless_networks WHERE 1=1';
     const params = [];
     let paramCount = 0;
 
@@ -2372,8 +2329,12 @@ app.get('/api/wireless-networks', requireAuth, async (req, res) => {
 
 // Get single wireless network
 app.get('/api/wireless-networks/:id', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid wireless network ID' });
+  }
   try {
-    const result = await pool.query('SELECT * FROM wireless_networks WHERE id = $1', [req.params.id]);
+    const result = await pool.query('SELECT id, ssid, bssid, latitude, longitude, accuracy, encryption, signal_strength, frequency, channel, network_type, confidence_level, first_seen, last_seen, scan_date, person_id, association_note, association_confidence, import_source, notes, tags, area_name, associated_person_ids, associated_business_ids, created_at, updated_at FROM wireless_networks WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Wireless network not found' });
     }

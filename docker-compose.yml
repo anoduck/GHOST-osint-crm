@@ -32,13 +32,14 @@ services:
     ports:
       - "3001:3001"
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 3001
       DB_HOST: db
       DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-osint_crm_db}
       DB_PORT: 5432
+      SESSION_SECRET: ${SESSION_SECRET}
     volumes:
       - ./backend/public:/usr/src/app/public
     restart: unless-stopped
@@ -60,12 +61,8 @@ services:
     container_name: osint-crm-db
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-osint_crm_db}
-    # SECURITY: Port mapping exposes database to host network
-    # Comment out in production - only needed for local development/debugging
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped

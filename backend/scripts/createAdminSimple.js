@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 // Simple script to create admin user with command line arguments
+// Usage: node createAdminSimple.js <username> <password> <email> [firstName] [lastName]
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 
@@ -8,18 +9,35 @@ const dbConfig = {
   user: process.env.DB_USER || 'postgres',
   host: process.env.DB_HOST || 'localhost',
   database: process.env.DB_NAME || 'osint_crm_db',
-  password: process.env.DB_PASSWORD || 'changeme',
+  password: process.env.DB_PASSWORD,
   port: parseInt(process.env.DB_PORT || '5432', 10),
 };
 
 const pool = new Pool(dbConfig);
 
 async function createAdmin() {
-  const username = process.argv[2] || 'admin';
-  const password = process.argv[3] || 'admin123';
-  const email = process.argv[4] || 'admin@example.com';
+  const username = process.argv[2];
+  const password = process.argv[3];
+  const email = process.argv[4];
   const firstName = process.argv[5] || 'Admin';
   const lastName = process.argv[6] || 'User';
+
+  if (!username || !password || !email) {
+    console.error('Usage: node createAdminSimple.js <username> <password> <email> [firstName] [lastName]');
+    console.error('All three of username, password, and email are required.');
+    process.exit(1);
+  }
+
+  if (password.length < 12) {
+    console.error('Password must be at least 12 characters long.');
+    process.exit(1);
+  }
+
+  const knownWeakPasswords = ['admin123', 'changeme', 'password', 'newpassword', 'admin'];
+  if (knownWeakPasswords.includes(password.toLowerCase())) {
+    console.error('That password is not allowed. Choose a strong, unique password.');
+    process.exit(1);
+  }
 
   console.log('\nCreating admin user...');
   console.log(`Username: ${username}`);
@@ -36,7 +54,7 @@ async function createAdmin() {
       [username, email, password_hash, firstName, lastName]
     );
 
-    console.log('✓ Admin user created successfully!\n');
+    console.log('Admin user created successfully!\n');
     console.log('User details:');
     console.log(`  ID: ${result.rows[0].id}`);
     console.log(`  Username: ${result.rows[0].username}`);
@@ -46,7 +64,7 @@ async function createAdmin() {
 
     process.exit(0);
   } catch (error) {
-    console.error('\n✗ Error:', error.message);
+    console.error('\nError:', error.message);
     process.exit(1);
   } finally {
     await pool.end();
