@@ -263,7 +263,7 @@ Used cache: ${result.summary.cached}`);
       if (geocodeResponse.ok) {
         const geocodeResult = await geocodeResponse.json();
         if (geocodeResult.success) {
-          // Now add the location to the person
+          // Append location to the person's locations array (what the map reads from)
           const locationData = {
             address: newLocationData.address,
             city: geocodeResult.result.city || '',
@@ -274,14 +274,15 @@ Used cache: ${result.summary.cached}`);
             longitude: geocodeResult.result.lng,
             type: 'other',
             current: true,
-            date_added: new Date().toISOString().split('T')[0]
+            date_added: new Date().toISOString().split('T')[0],
+            geocode_confidence: geocodeResult.result.confidence,
+            geocode_provider: geocodeResult.result.provider || 'nominatim',
+            geocoded_at: new Date().toISOString()
           };
 
-          const addResponse = await fetch(`${API_BASE_URL}/people/${newLocationData.personId}/travel-history`, {
+          const addResponse = await fetch(`${API_BASE_URL}/people/${newLocationData.personId}/locations`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(locationData)
           });

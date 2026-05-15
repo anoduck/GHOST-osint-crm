@@ -1007,6 +1007,32 @@ app.put('/api/people/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Append a single location to a person's locations JSONB array
+app.post('/api/people/:id/locations', requireAuth, async (req, res) => {
+  const personId = parseInt(req.params.id, 10);
+  if (isNaN(personId)) return res.status(400).json({ error: 'Invalid person ID' });
+
+  const location = req.body;
+  if (!location || typeof location !== 'object') {
+    return res.status(400).json({ error: 'Location object is required' });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE people
+       SET locations = COALESCE(locations, '[]'::jsonb) || $1::jsonb
+       WHERE id = $2
+       RETURNING id`,
+      [JSON.stringify(location), personId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Person not found' });
+    res.status(201).json({ message: 'Location added' });
+  } catch (err) {
+    console.error('Error appending location:', err);
+    res.status(500).json({ error: 'Failed to add location' });
+  }
+});
+
 app.delete('/api/people/:id', requireAuth, async (req, res) => {
   const personId = parseInt(req.params.id, 10);
   if (isNaN(personId)) return res.status(400).json({ error: 'Invalid person ID' });
