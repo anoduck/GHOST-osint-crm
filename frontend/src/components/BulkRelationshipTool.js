@@ -283,8 +283,9 @@ const BulkRelationshipTool = ({ onClose, people, onComplete }) => {
                 <li>From, To, Type, Note</li>
                 <li>Example: John Doe, Jane Smith, family, Siblings</li>
               </ul>
-              <p className="text-xs text-blue-600 mt-2">
-                ⚠️ Person names must match exactly (case-insensitive). Use "Last, First" or "First Last" format.
+              <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                Person names must match exactly (case-insensitive). Use "Last, First" or "First Last" format.
               </p>
             </div>
           </div>

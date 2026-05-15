@@ -39,6 +39,7 @@ const AddEditPersonForm = ({ person, people, customFields, onSave, onCancel }) =
   const [osintDataTypes, setOsintDataTypes] = useState(OSINT_DATA_TYPES);
   const [existingCases, setExistingCases] = useState([]);
   const [caseExists, setCaseExists] = useState(false);
+  const [optionsLoadError, setOptionsLoadError] = useState(false);
 
   useEffect(() => {
     // Load dynamic options from database
@@ -76,15 +77,17 @@ const AddEditPersonForm = ({ person, people, customFields, onSave, onCancel }) =
         if (osintTypes.length > 0) setOsintDataTypes(osintTypes);
       } catch (error) {
         console.error('Error loading model options:', error);
+        setOptionsLoadError(true);
       }
     };
-    
+
     const loadCases = async () => {
       try {
         const cases = await casesAPI.getAll();
         setExistingCases(cases);
       } catch (error) {
         console.error('Error loading cases:', error);
+        setOptionsLoadError(true);
       }
     };
     
@@ -257,6 +260,12 @@ const AddEditPersonForm = ({ person, people, customFields, onSave, onCancel }) =
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {optionsLoadError && (
+            <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              Some options failed to load. Categories and connection types may be incomplete.
+            </div>
+          )}
           {/* Basic Information */}
           <div className="grid grid-cols-2 gap-6">
             <div>

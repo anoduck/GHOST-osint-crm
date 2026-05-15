@@ -173,7 +173,7 @@ const PeopleList = ({
 
           <button
             onClick={() => setShowAddPersonForm(true)}
-            className="px-6 py-3 bg-blue-600 text-white dark:bg-blue-500 rounded-lg hover:shadow-glow-md transition-all duration-300 flex items-center group"
+            className="px-6 py-3 bg-blue-600 text-white dark:bg-blue-500 rounded-lg hover:shadow-glow-md transition-[box-shadow] duration-150 flex items-center group active:scale-[0.97]"
           >
             <Plus className="w-5 h-5 mr-2 group-hover:animate-pulse" />
             Add Person
@@ -192,14 +192,14 @@ const PeopleList = ({
                 placeholder="Search by name, alias, or case..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md transition-all duration-300 dark:bg-slate-800 dark:text-white dark:placeholder-gray-500"
+                className="w-full pl-10 pr-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md dark:bg-slate-800 dark:text-white dark:placeholder-gray-500"
               />
             </div>
           </div>
           <select
             value={filterCase}
             onChange={(e) => setFilterCase(e.target.value)}
-            className="px-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md transition-all duration-300 dark:bg-slate-800 dark:text-white"
+            className="px-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md dark:bg-slate-800 dark:text-white"
           >
             <option value="">All Cases</option>
             {cases.map(caseItem => (
@@ -209,7 +209,7 @@ const PeopleList = ({
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md transition-all duration-300 dark:bg-slate-800 dark:text-white"
+            className="px-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md dark:bg-slate-800 dark:text-white"
           >
             <option value="">All Categories</option>
             {PERSON_CATEGORIES.map(cat => (
@@ -219,7 +219,7 @@ const PeopleList = ({
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md transition-all duration-300 dark:bg-slate-800 dark:text-white"
+            className="px-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md dark:bg-slate-800 dark:text-white"
           >
             <option value="">All Statuses</option>
             {PERSON_STATUSES.map(status => (
@@ -229,7 +229,7 @@ const PeopleList = ({
           <select
             value={filterLastModified}
             onChange={(e) => setFilterLastModified(e.target.value)}
-            className="px-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md transition-all duration-300 dark:bg-slate-800 dark:text-white"
+            className="px-4 py-3 glass border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-accent-primary focus:shadow-md dark:bg-slate-800 dark:text-white"
           >
             <option value="">All Time</option>
             <option value="week">Last Week</option>
@@ -256,52 +256,52 @@ const PeopleList = ({
         /* People Cards Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredPeople.map(person => (
-          <div key={person.id} className="bg-white dark:bg-gray-800 backdrop-blur-xl border border-gray-300 dark:border-gray-600 shadow-glass-lg rounded-lg-lg p-6 hover:shadow-glass-xl transition-all duration-300 group">
+          <div key={person.id} className="bg-white dark:bg-slate-800 backdrop-blur-xl border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg p-5 hover:shadow-md transition-shadow duration-150 group">
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center space-x-3">
                 {person.profile_picture_url ? (
-                  <img 
-                    src={person.profile_picture_url} 
-                    alt={getFullName(person)} 
-                    className="w-12 h-12 rounded-full object-cover" 
+                  <img
+                    src={person.profile_picture_url}
+                    alt={getFullName(person)}
+                    className="w-12 h-12 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex items-center justify-center">
                     <User className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                   </div>
                 )}
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 dark:from-gray-100 dark:to-gray-300">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                     {getFullName(person)}
                     {person.date_of_birth && (
-                      <span className="text-gray-500 dark:text-gray-400 font-normal ml-2">
+                      <span className="text-slate-500 dark:text-slate-400 font-normal ml-2">
                         ({getAge(person.date_of_birth)})
                       </span>
                     )}
                   </h3>
                   {person.aliases && person.aliases.length > 0 && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">AKA: {person.aliases.join(', ')}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">AKA: {person.aliases.join(', ')}</p>
                   )}
                 </div>
               </div>
-              <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+              <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                 <button
                   onClick={() => setSelectedPersonForDetail(person)}
-                  className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400 hover:bg-blue-700 dark:hover:bg-blue-600 hover:text-white transition-all duration-300"
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition-colors duration-150 active:scale-[0.97]"
                   title="View Details"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setEditingPerson(person)}
-                  className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gradient-secondary hover:text-white dark:hover:text-white transition-all duration-300"
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-600 hover:text-white transition-colors duration-150 active:scale-[0.97]"
                   title="Edit"
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => handleDelete(person.id)}
-                  className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-accent-danger hover:bg-red-600 dark:bg-red-500 hover:text-white transition-all duration-300"
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white transition-colors duration-150 active:scale-[0.97]"
                   title="Delete"
                 >
                   <Trash2 className="w-4 h-4" />

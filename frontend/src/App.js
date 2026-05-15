@@ -212,7 +212,7 @@ const App = () => {
   // Show loading state while checking authentication
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex items-center justify-center min-h-[100dvh] bg-slate-50 dark:bg-slate-900">
         <div className="text-gray-600 dark:text-gray-400">Loading...</div>
       </div>
     );
@@ -224,7 +224,7 @@ const App = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative overflow-hidden transition-colors duration-500">
+    <div className="flex min-h-[100dvh] bg-gradient-to-br from-indigo-50 via-white to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative overflow-hidden transition-colors duration-150">
       {/* Mobile overlay for small screens */}
       <div className="lg:hidden fixed inset-0 bg-black/50 z-40" style={{ display: 'none' }} id="mobile-overlay"></div>
       {/* Background decoration */}
@@ -247,7 +247,7 @@ const App = () => {
                 </div>
               )}
               <div>
-                <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-gray-100 dark:to-gray-300">{appSettings.appName}</h2>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{appSettings.appName}</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">OSINT Investigation Suite</p>
               </div>
             </div>
@@ -265,17 +265,16 @@ const App = () => {
               <button
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
-                className={`w-full text-left p-4 rounded-glass transition-all duration-300 flex items-center space-x-3 group relative overflow-hidden ${
+                className={`w-full text-left p-4 rounded-glass transition-[background-color,box-shadow] duration-150 flex items-center space-x-3 group relative overflow-hidden active:scale-[0.97] ${
                   isActive
                     ? 'bg-gradient-primary text-white shadow-glow-md'
-                    : 'glass-button text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                    : 'glass-button text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
-                style={{ animationDelay: `${index * 50}ms` }}
               >
                 {isActive && (
                   <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-50"></div>
                 )}
-                <Icon className={`w-5 h-5 transition-all duration-300 ${isActive ? 'text-white' : 'text-gray-600 dark:text-gray-400 group-hover:text-accent-primary'}`} />
+                <Icon className={`w-5 h-5 transition-colors duration-150 ${isActive ? 'text-white' : 'text-slate-600 dark:text-slate-400 group-hover:text-accent-primary'}`} />
                 <span className="font-medium relative z-10">{item.label}</span>
                 {isActive && (
                   <div className="absolute right-2 w-2 h-2 bg-white rounded-full animate-pulse-soft"></div>
@@ -287,9 +286,9 @@ const App = () => {
           {/* Logout button */}
           <button
             onClick={handleLogout}
-            className="w-full text-left p-4 rounded-glass transition-all duration-300 flex items-center space-x-3 group relative overflow-hidden glass-button text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 mt-4 border-t border-white/20 pt-4"
+            className="w-full text-left p-4 rounded-glass transition-[background-color,box-shadow] duration-150 flex items-center space-x-3 group relative overflow-hidden glass-button text-slate-700 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 active:scale-[0.97] mt-4 border-t border-white/20 pt-4"
           >
-            <LogOut className="w-5 h-5 transition-all duration-300" />
+            <LogOut className="w-5 h-5 transition-colors duration-150" />
             <span className="font-medium relative z-10">Logout</span>
             <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">{currentUser?.username}</span>
           </button>
@@ -299,7 +298,7 @@ const App = () => {
         <div className="p-4 border-t border-white/20">
           <button
             onClick={() => setShowAdvancedSearch(true)}
-            className="w-full p-4 glass-heavy text-gray-700 rounded-glass hover:shadow-glow-sm transition-all duration-300 flex items-center justify-center space-x-2 group"
+            className="w-full p-4 glass-heavy text-slate-700 rounded-glass hover:shadow-glow-sm transition-[box-shadow] duration-150 flex items-center justify-center space-x-2 group active:scale-[0.97]"
           >
             <Search className="w-5 h-5 text-accent-primary group-hover:animate-pulse" />
             <span className="font-medium">Advanced Search</span>

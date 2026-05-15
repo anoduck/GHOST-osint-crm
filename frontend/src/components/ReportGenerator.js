@@ -123,35 +123,35 @@ const ReportGenerator = ({ caseId = null, personId = null, customPeopleIds = nul
       let markdown = '';
       
       // Title and Header
-      markdown += `# 🔍 INVESTIGATION REPORT\n\n`;
-      
-      const reportTitle = data.selectedCase ? data.selectedCase.case_name : 
+      markdown += `# INVESTIGATION REPORT\n\n`;
+
+      const reportTitle = data.selectedCase ? data.selectedCase.case_name :
                          data.selectedPerson ? getFullName(data.selectedPerson) : "General Report";
-      
+
       markdown += `## ${reportTitle}\n\n`;
       markdown += `**Generated:** ${formatDateTime(new Date())}  \n`;
       markdown += `**Report ID:** RPT-${Date.now()}  \n`;
-      markdown += `**Classification:** 🔒 CONFIDENTIAL\n\n`;
-      
+      markdown += `**Classification:** CONFIDENTIAL\n\n`;
+
       markdown += `---\n\n`;
-      
+
       // Summary Statistics
-      markdown += `## 📊 SUMMARY STATISTICS\n\n`;
-      
+      markdown += `## SUMMARY STATISTICS\n\n`;
+
       const totalConnections = data.people.reduce((sum, p) => sum + (p.connections?.length || 0), 0);
       const activeTasks = data.todos.filter(t => t.status !== 'done').length;
-      
+
       markdown += `| Metric | Count |\n`;
       markdown += `|--------|-------|\n`;
-      markdown += `| 👥 People | ${data.people.length} |\n`;
-      markdown += `| 🏢 Businesses | ${data.businesses.length} |\n`;
-      markdown += `| 📍 Locations | ${data.locations.length} |\n`;
-      markdown += `| 🔗 Connections | ${totalConnections} |\n`;
-      markdown += `| ✅ Active Tasks | ${activeTasks} |\n\n`;
-      
+      markdown += `| People | ${data.people.length} |\n`;
+      markdown += `| Businesses | ${data.businesses.length} |\n`;
+      markdown += `| Locations | ${data.locations.length} |\n`;
+      markdown += `| Connections | ${totalConnections} |\n`;
+      markdown += `| Active Tasks | ${activeTasks} |\n\n`;
+
       // Executive Summary
       if (reportOptions.includeSummary) {
-        markdown += `## 📋 EXECUTIVE SUMMARY\n\n`;
+        markdown += `## EXECUTIVE SUMMARY\n\n`;
         
         if (data.selectedCase) {
           markdown += `This report covers the investigation case **"${data.selectedCase.case_name}"**.  \n`;
@@ -183,7 +183,7 @@ const ReportGenerator = ({ caseId = null, personId = null, customPeopleIds = nul
       
       // People Profiles
       if (reportOptions.includePeople && data.people.length > 0) {
-        markdown += `## 👥 PEOPLE PROFILES\n\n`;
+        markdown += `## PEOPLE PROFILES\n\n`;
         
         // People summary table
         markdown += `### Overview\n\n`;
@@ -228,7 +228,7 @@ const ReportGenerator = ({ caseId = null, personId = null, customPeopleIds = nul
       
       // Business Profiles
       if (data.businesses.length > 0) {
-        markdown += `## 🏢 BUSINESS PROFILES\n\n`;
+        markdown += `## BUSINESS PROFILES\n\n`;
         
         // Business summary table
         markdown += `| Name | Industry | Address | Website |\n`;
@@ -270,7 +270,7 @@ const ReportGenerator = ({ caseId = null, personId = null, customPeopleIds = nul
       
       // Connections Analysis
       if (reportOptions.includeConnections && totalConnections > 0) {
-        markdown += `## 🔗 CONNECTIONS ANALYSIS\n\n`;
+        markdown += `## CONNECTIONS ANALYSIS\n\n`;
         
         markdown += `**Total Documented Connections:** ${totalConnections}\n\n`;
         
@@ -299,7 +299,7 @@ const ReportGenerator = ({ caseId = null, personId = null, customPeopleIds = nul
       
       // Location Analysis
       if (reportOptions.includeLocations && data.locations.length > 0) {
-        markdown += `## 📍 LOCATION ANALYSIS\n\n`;
+        markdown += `## LOCATION ANALYSIS\n\n`;
         
         markdown += `**Total Locations Tracked:** ${data.locations.length}\n\n`;
         
@@ -336,7 +336,7 @@ const ReportGenerator = ({ caseId = null, personId = null, customPeopleIds = nul
       
       // Tasks/Todos
       if (reportOptions.includeTodos && data.todos.length > 0) {
-        markdown += `## ✅ INVESTIGATION TASKS\n\n`;
+        markdown += `## INVESTIGATION TASKS\n\n`;
         
         const openTodos = data.todos.filter(t => t.status === 'open').length;
         const inProgressTodos = data.todos.filter(t => t.status === 'in_progress').length;
@@ -354,7 +354,7 @@ const ReportGenerator = ({ caseId = null, personId = null, customPeopleIds = nul
         Object.entries(tasksByStatus).forEach(([status, tasks]) => {
           if (tasks.length === 0) return;
           
-          const statusEmoji = status === 'done' ? '✅' : status === 'in_progress' ? '🔄' : '📋';
+          const statusEmoji = status === 'done' ? '[done]' : status === 'in_progress' ? '[in progress]' : '[open]';
           markdown += `### ${statusEmoji} ${status.replace('_', ' ').toUpperCase()} (${tasks.length})\n\n`;
           
           tasks.forEach((todo, idx) => {
@@ -432,7 +432,7 @@ const ReportGenerator = ({ caseId = null, personId = null, customPeopleIds = nul
       markdown += `**Generated By:** GHOST OSINT Investigation CRM  \n`;
       markdown += `**Generation Date:** ${formatDateTime(new Date())}  \n`;
       markdown += `**Report ID:** RPT-${Date.now()}  \n`;
-      markdown += `**Classification:** 🔒 CONFIDENTIAL\n\n`;
+      markdown += `**Classification:** CONFIDENTIAL\n\n`;
       markdown += `> This report contains confidential information and is intended solely for authorized personnel.\n\n`;
       markdown += `---\n`;
       markdown += `*End of Report*`;
