@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Simple script to create admin user with command line arguments
-// Usage: node createAdminSimple.js <username> <password> <email> [firstName] [lastName]
+// Usage: node createAdminSimple.js <username> <password> [email] [firstName] [lastName]
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 
@@ -18,13 +18,12 @@ const pool = new Pool(dbConfig);
 async function createAdmin() {
   const username = process.argv[2];
   const password = process.argv[3];
-  const email = process.argv[4];
+  const email = process.argv[4] || null;
   const firstName = process.argv[5] || 'Admin';
   const lastName = process.argv[6] || 'User';
 
-  if (!username || !password || !email) {
-    console.error('Usage: node createAdminSimple.js <username> <password> <email> [firstName] [lastName]');
-    console.error('All three of username, password, and email are required.');
+  if (!username || !password) {
+    console.error('Usage: node createAdminSimple.js <username> <password> [email] [firstName] [lastName]');
     process.exit(1);
   }
 
