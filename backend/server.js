@@ -1033,6 +1033,56 @@ app.post('/api/people/:id/locations', requireAuth, async (req, res) => {
   }
 });
 
+// Update a single location in people.locations by array index
+app.put('/api/people/:id/locations/:index', requireAuth, async (req, res) => {
+  const personId = parseInt(req.params.id, 10);
+  const idx = parseInt(req.params.index, 10);
+  if (isNaN(personId) || isNaN(idx) || idx < 0) {
+    return res.status(400).json({ error: 'Invalid person ID or location index' });
+  }
+  const location = req.body;
+  if (!location || typeof location !== 'object') {
+    return res.status(400).json({ error: 'Location object is required' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE people
+       SET locations = jsonb_set(locations, ARRAY[$1::text], $2::jsonb, false)
+       WHERE id = $3
+       RETURNING id`,
+      [idx.toString(), JSON.stringify(location), personId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Person not found' });
+    res.json({ message: 'Location updated' });
+  } catch (err) {
+    console.error('Error updating location:', err);
+    res.status(500).json({ error: 'Failed to update location' });
+  }
+});
+
+// Delete a single location from people.locations by array index
+app.delete('/api/people/:id/locations/:index', requireAuth, async (req, res) => {
+  const personId = parseInt(req.params.id, 10);
+  const idx = parseInt(req.params.index, 10);
+  if (isNaN(personId) || isNaN(idx) || idx < 0) {
+    return res.status(400).json({ error: 'Invalid person ID or location index' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE people
+       SET locations = locations - $1
+       WHERE id = $2
+       RETURNING id`,
+      [idx, personId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Person not found' });
+    res.json({ message: 'Location deleted' });
+  } catch (err) {
+    console.error('Error deleting location:', err);
+    res.status(500).json({ error: 'Failed to delete location' });
+  }
+});
+
 app.delete('/api/people/:id', requireAuth, async (req, res) => {
   const personId = parseInt(req.params.id, 10);
   if (isNaN(personId)) return res.status(400).json({ error: 'Invalid person ID' });

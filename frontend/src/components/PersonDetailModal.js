@@ -1,7 +1,7 @@
 // File: frontend/src/components/PersonDetailModal.js
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import { User, Edit2, X, Database, Mail, Phone, Globe, MapPin, Hash, Link, Calendar, Briefcase, Tag, Network, FileText } from 'lucide-react';
+import { User, Edit2, X, Database, Mail, Phone, Globe, MapPin, Hash, Link, Calendar, Briefcase, Tag, Network, FileText, Trash2 } from 'lucide-react';
 import RelationshipManager from './visualization/RelationshipManager';
 import ReportGenerator from './ReportGenerator';
 import TravelPatternAnalysis from './TravelPatternAnalysis';
@@ -10,6 +10,24 @@ import TravelPatternAnalysis from './TravelPatternAnalysis';
 const PersonDetailModal = ({ person, people, customFields, onClose, onEdit }) => {
   const [activeTab, setActiveTab] = useState('details');
   const [showReportGenerator, setShowReportGenerator] = useState(false);
+  const [locations, setLocations] = useState(person.locations || []);
+
+  const handleDeleteLocation = async (index) => {
+    if (!window.confirm('Remove this location?')) return;
+    try {
+      const res = await fetch(`/api/people/${person.id}/locations/${index}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        setLocations(prev => prev.filter((_, i) => i !== index));
+      } else {
+        alert('Failed to delete location');
+      }
+    } catch {
+      alert('Failed to delete location');
+    }
+  };
   // Removed: const [riskSummary, setRiskSummary] = useState(null);
 
   const getFullName = (person) => {
@@ -325,18 +343,18 @@ const PersonDetailModal = ({ person, people, customFields, onClose, onEdit }) =>
             
             {activeTab === 'locations' && (
               <div className="p-6">
-                {person.locations && person.locations.length > 0 ? (
+                {locations.length > 0 ? (
                   <div>
                     <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">Locations</h3>
                     <div className="space-y-3">
-                      {person.locations.map((location, index) => (
-                        <div key={index} className="p-4 glass rounded-lg-lg">
+                      {locations.map((location, index) => (
+                        <div key={index} className="p-4 glass rounded-lg">
                           <div className="flex items-start justify-between">
-                            <div>
+                            <div className="flex-1 min-w-0">
                               <div className="flex items-center space-x-2 mb-2">
-                                <MapPin className="w-4 h-4 text-gray-400" />
+                                <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                 <span className="font-medium text-sm px-3 py-1 bg-blue-600 text-white dark:bg-blue-500 rounded-lg">
-                                  {location.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                  {(location.type || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                                 </span>
                               </div>
                               <p className="font-medium text-gray-900 dark:text-gray-100">{location.address}</p>
@@ -347,6 +365,13 @@ const PersonDetailModal = ({ person, people, customFields, onClose, onEdit }) =>
                               </p>
                               {location.notes && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{location.notes}</p>}
                             </div>
+                            <button
+                              onClick={() => handleDeleteLocation(index)}
+                              className="ml-3 p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-150 flex-shrink-0"
+                              title="Remove location"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
                       ))}
