@@ -479,11 +479,52 @@ const initializeDatabase = async () => {
     console.log('Checked/created "travel_history" table.');
     await applyUpdatedAtTrigger(client, 'travel_history');
 
-    // Add indexes for better query performance
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_travel_history_person_id ON travel_history(person_id);
       CREATE INDEX IF NOT EXISTS idx_travel_history_dates ON travel_history(arrival_date, departure_date);
       CREATE INDEX IF NOT EXISTS idx_travel_history_location ON travel_history(country, city);
+    `);
+
+    // Create wireless_networks table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS wireless_networks (
+        id SERIAL PRIMARY KEY,
+        ssid VARCHAR(255) NOT NULL,
+        bssid VARCHAR(17),
+        latitude DOUBLE PRECISION,
+        longitude DOUBLE PRECISION,
+        accuracy DOUBLE PRECISION,
+        encryption VARCHAR(50),
+        signal_strength INTEGER,
+        frequency VARCHAR(20),
+        channel INTEGER,
+        network_type VARCHAR(20) DEFAULT 'WIFI',
+        confidence_level VARCHAR(20),
+        first_seen TIMESTAMP,
+        last_seen TIMESTAMP,
+        scan_date TIMESTAMP,
+        person_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+        association_note TEXT,
+        association_confidence VARCHAR(20),
+        import_source VARCHAR(255),
+        import_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        notes TEXT,
+        tags TEXT[],
+        area_name VARCHAR(255),
+        password VARCHAR(255),
+        associated_person_ids INTEGER[],
+        associated_business_ids INTEGER[],
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('Checked/created "wireless_networks" table.');
+    await applyUpdatedAtTrigger(client, 'wireless_networks');
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_wireless_ssid ON wireless_networks(ssid);
+      CREATE INDEX IF NOT EXISTS idx_wireless_location ON wireless_networks(latitude, longitude);
+      CREATE INDEX IF NOT EXISTS idx_wireless_person ON wireless_networks(person_id);
     `);
 
   } catch (err) {
