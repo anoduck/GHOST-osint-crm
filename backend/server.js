@@ -661,7 +661,7 @@ app.get('/api/search/advanced', requireAuth, async (req, res) => {
       }
       
       if (searchFields.includes('aliases')) {
-        searchConditions.push(`EXISTS (SELECT 1 FROM unnest(aliases) AS alias WHERE LOWER(alias) LIKE $${++paramCount})`);
+        searchConditions.push(`EXISTS (SELECT 1 FROM unnest(aliases) AS a WHERE LOWER(a) LIKE $${++paramCount})`);
         queryParams.push(`%${req.query.searchText.toLowerCase()}%`);
       }
       
@@ -714,7 +714,9 @@ app.get('/api/search/advanced', requireAuth, async (req, res) => {
     const allowedSortColumns = ['updated_at', 'created_at', 'first_name', 'last_name', 'status', 'category'];
     const sortBy = allowedSortColumns.includes(req.query.sortBy) ? req.query.sortBy : 'updated_at';
     const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
-    query += ` ORDER BY ${sortBy} ${sortOrder}`;
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    query += ` ORDER BY ${sortBy} ${sortOrder} LIMIT $${++paramCount}`;
+    queryParams.push(limit);
 
     const result = await pool.query(query, queryParams);
     res.json(result.rows);
@@ -1640,7 +1642,7 @@ app.delete('/api/settings/custom-fields/:id', requireAdmin, async (req, res) => 
 });
 
 // Model options endpoints
-app.get('/api/settings/model-options', requireAdmin, async (req, res) => {
+app.get('/api/settings/model-options', requireAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM model_options ORDER BY model_type, display_order ASC');
     res.json(result.rows);
@@ -2387,6 +2389,8 @@ app.post('/api/wireless-networks', requireAuth, async (req, res) => {
 
 // Update wireless network
 app.put('/api/wireless-networks/:id', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid wireless network ID' });
   try {
     const {
       ssid, bssid, latitude, longitude, accuracy, encryption, signal_strength,
@@ -2407,7 +2411,7 @@ app.put('/api/wireless-networks/:id', requireAuth, async (req, res) => {
       [ssid, bssid, latitude, longitude, accuracy, encryption, signal_strength,
        frequency, channel, network_type, confidence_level, first_seen, last_seen,
        scan_date, person_id, association_note, association_confidence,
-       notes, tags, area_name, password, associated_person_ids, associated_business_ids, req.params.id]
+       notes, tags, area_name, password, associated_person_ids, associated_business_ids, id]
     );
 
     if (result.rows.length === 0) {
@@ -2423,8 +2427,10 @@ app.put('/api/wireless-networks/:id', requireAuth, async (req, res) => {
 
 // Delete wireless network
 app.delete('/api/wireless-networks/:id', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid wireless network ID' });
   try {
-    const result = await pool.query('DELETE FROM wireless_networks WHERE id = $1 RETURNING *', [req.params.id]);
+    const result = await pool.query('DELETE FROM wireless_networks WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Wireless network not found' });
     }
@@ -2616,6 +2622,8 @@ app.get('/api/wireless-networks/nearby', requireAuth, async (req, res) => {
 
 // Associate wireless network with person
 app.post('/api/wireless-networks/:id/associate', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid wireless network ID' });
   try {
     const { person_id, association_note, association_confidence } = req.body;
 
@@ -2623,7 +2631,7 @@ app.post('/api/wireless-networks/:id/associate', requireAuth, async (req, res) =
       `UPDATE wireless_networks
        SET person_id = $1, association_note = $2, association_confidence = $3
        WHERE id = $4 RETURNING *`,
-      [person_id, association_note, association_confidence || 'investigating', req.params.id]
+      [person_id, association_note, association_confidence || 'investigating', id]
     );
 
     if (result.rows.length === 0) {
@@ -2639,12 +2647,14 @@ app.post('/api/wireless-networks/:id/associate', requireAuth, async (req, res) =
 
 // Remove association from wireless network
 app.delete('/api/wireless-networks/:id/associate', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid wireless network ID' });
   try {
     const result = await pool.query(
       `UPDATE wireless_networks
        SET person_id = NULL, association_note = NULL, association_confidence = NULL
        WHERE id = $1 RETURNING *`,
-      [req.params.id]
+      [id]
     );
 
     if (result.rows.length === 0) {
